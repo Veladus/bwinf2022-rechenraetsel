@@ -175,10 +175,28 @@ impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
                 BTreeMap::new()
             };
 
-            new_duplicates.extend(new_possible.intersection(&possible_plus));
+            new_duplicates.extend(new_possible.iter().filter_map(|(v1, l1)| {
+                if let Some(l2) = possible_minus.get(v1) {
+                    Some((*v1, [l1.clone(), l2.clone()]))
+                } else {
+                    None
+                }
+            }));
             if sep != 0 {
-                new_duplicates.extend(possible_plus.intersection(&possible_minus));
-                new_duplicates.extend(new_possible.intersection(&possible_minus));
+                new_duplicates.extend(possible_plus.iter().filter_map(|(v1, l1)| {
+                    if let Some(l2) = possible_minus.get(v1) {
+                        Some((*v1, [l1.clone(), l2.clone()]))
+                    } else {
+                        None
+                    }
+                }));
+                new_duplicates.extend(new_possible.iter().filter_map(|(v1, l1)| {
+                    if let Some(l2) = possible_minus.get(v1) {
+                        Some((*v1, [l1.clone(), l2.clone()]))
+                    } else {
+                        None
+                    }
+                }));
             }
 
             let new_possible_prev = new_possible;
@@ -186,18 +204,21 @@ impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
             new_possible.extend(
                 possible_plus
                     .iter()
-                    .filter(|(v, l)| !new_duplicates.contains_key(v)).map(|(v, l)| (*v, l.clone())),
+                    .filter(|(v, _)| !new_duplicates.contains_key(v))
+                    .map(|(v, l)| (*v, l.clone())),
             );
             new_possible.extend(
                 new_possible_prev
                     .iter()
-                    .filter(|(v, l)| !new_duplicates.contains_key(v)).map(|(v, l)| (*v, l.clone())),
+                    .filter(|(v, _)| !new_duplicates.contains_key(v))
+                    .map(|(v, l)| (*v, l.clone())),
             );
             if sep != 0 {
                 new_possible.extend(
                     possible_minus
                         .iter()
-                        .filter(|(v, l)| !new_duplicates.contains_key(v)).map(|(v, l)| (*v, l.clone())),
+                        .filter(|(v, _)| !new_duplicates.contains_key(v))
+                        .map(|(v, l)| (*v, l.clone())),
                 );
             }
         }
@@ -209,7 +230,10 @@ impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
         digits: &[u8],
     ) -> (BTreeMap<i64, String>, BTreeMap<i64, [String; 2]>) {
         if digits.len() == 0 {
-            return ([(1, String::from(""))].into_iter().collect(), BTreeMap::new());
+            return (
+                [(1, String::from(""))].into_iter().collect(),
+                BTreeMap::new(),
+            );
         }
         match self.cache_mul.get(digits) {
             Some(r) => return r.clone(),
@@ -227,7 +251,7 @@ impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
         let (possible, duplicates) = self.possible_results_mul(&digits[..digits.len() - 1]);
         let next_digit = digits[digits.len() - 1] as i64;
         if next_digit == 0 {
-            if let Some((v, [l1, l2])) = duplicates.iter().next() {
+            if let Some((_, [l1, l2])) = duplicates.iter().next() {
                 return (
                     BTreeMap::new(),
                     [(0, [format!("{}*", l1), format!("{}*", l2)])]
@@ -237,7 +261,7 @@ impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
             } else {
                 let mut iter = possible.iter();
                 let (v1, l1) = iter.next().unwrap();
-                if let Some((v2, l2)) = iter.next() {
+                if let Some((_, l2)) = iter.next() {
                     return (
                         BTreeMap::new(),
                         [(0, [format!("{}*", l1), format!("{}*", l2)])]
@@ -271,22 +295,41 @@ impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
             BTreeMap::new()
         };
         let mut new_duplicates: BTreeMap<i64, [String; 2]> = BTreeMap::new();
-        new_duplicates.extend(duplicates.iter().map(|(p, [l1, l2])| (p * next_digit, [format!("{}*", l1), format!("{}*", l2)])));
+        new_duplicates.extend(
+            duplicates
+                .iter()
+                .map(|(p, [l1, l2])| (p * next_digit, [format!("{}*", l1), format!("{}*", l2)])),
+        );
         if digits.len() != 1 {
             new_duplicates.extend(duplicates.iter().filter_map(|(v, la)| {
                 if v % next_digit == 0 {
-                    Some((v / next_digit, [format!("{}/", la[0]), format!("{}/", la[1])]))
+                    Some((
+                        v / next_digit,
+                        [format!("{}/", la[0]), format!("{}/", la[1])],
+                    ))
                 } else {
                     None
                 }
             }));
-            new_duplicates.extend(new_possible_mul.intersection(&new_possible_div).cloned());
+            new_duplicates.extend(new_possible_mul.iter().filter_map(|(&v1, l1)| {
+                if let Some(l2) = new_possible_div.get(&v1) {
+                    Some((v1, [l1.clone(), l2.clone()]))
+                } else {
+                    None
+                }
+            }));
         }
         (
             new_possible_mul
-                .symmetric_difference(&new_possible_div)
-                .cloned()
+                .iter()
+                .filter(|(v1, _)| !new_possible_div.contains_key(v1))
+                .chain(
+                    new_possible_div
+                        .iter()
+                        .filter(|(v1, _)| !new_possible_mul.contains_key(v1)),
+                )
                 .filter(|(v, _)| !new_duplicates.contains_key(v))
+                .map(|(&v, l)| (v, l.clone()))
                 .collect(),
             new_duplicates,
         )
