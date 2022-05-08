@@ -391,7 +391,12 @@ fn main() {
     };
 
     if let Some(r) = result {
-        if possible.contains_key(&r) {
+        if let Some(sol) = possible.get(&r) {
+            print!("{}", digits[0]);
+            for (digit, op) in digits.iter().skip(1).zip(sol.chars()) {
+                print!(" {} {}", op, digit);
+            }
+            println!(" = {}", r);
             println!("unique");
         } else if let Some(sols) = duplicates.get(&r) {
             for x in sols {
