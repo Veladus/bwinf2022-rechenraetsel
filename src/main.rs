@@ -1,59 +1,178 @@
 use clap::Arg;
 use clap::Command;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 #[derive(Default)]
 struct Rechenraetsel<const ALLOW_NEGATIVE: bool> {
-    cache: HashMap<Box<[u8]>, (BTreeSet<i64>, BTreeSet<i64>)>,
-    cache_mul: HashMap<Box<[u8]>, (BTreeSet<i64>, BTreeSet<i64>)>,
+    cache: HashMap<Box<[u8]>, (BTreeMap<i64, String>, BTreeMap<i64, [String; 2]>)>,
+    cache_mul: HashMap<Box<[u8]>, (BTreeMap<i64, String>, BTreeMap<i64, [String; 2]>)>,
 }
 
 impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
-    fn possible_results(&mut self, digits: &[u8]) -> (BTreeSet<i64>, BTreeSet<i64>) {
+    fn possible_results(
+        &mut self,
+        digits: &[u8],
+    ) -> (BTreeMap<i64, String>, BTreeMap<i64, [String; 2]>) {
         if digits.len() == 0 {
-            return ([0].into_iter().collect(), BTreeSet::new());
+            return (
+                [(0, String::from(""))].into_iter().collect(),
+                BTreeMap::new(),
+            );
         }
         match self.cache.get(digits) {
             Some(r) => return r.clone(),
-            None => {},
+            None => {}
         }
         let result = self.possible_results_uncached(digits);
-        self.cache.insert(digits.to_owned().into_boxed_slice(), result.clone());
+        self.cache
+            .insert(digits.to_owned().into_boxed_slice(), result.clone());
         result
     }
     // Split off the last summand.
-    fn possible_results_uncached(&mut self, digits: &[u8]) -> (BTreeSet<i64>, BTreeSet<i64>) {
-        let mut new_possible = BTreeSet::new();
-        let mut new_duplicates = BTreeSet::new();
+    fn possible_results_uncached(
+        &mut self,
+        digits: &[u8],
+    ) -> (BTreeMap<i64, String>, BTreeMap<i64, [String; 2]>) {
+        let mut new_possible: BTreeMap<i64, String> = BTreeMap::new();
+        let mut new_duplicates = BTreeMap::new();
         for sep in 0..digits.len() {
             let (possible1, duplicates1) = self.possible_results(&digits[..sep]);
             let (possible2, duplicates2) = self.possible_results_mul(&digits[sep..]);
-            new_duplicates.extend(possible1.iter().copied().flat_map(|v1| duplicates2.iter().copied().map(move |v2| v1 + v2)));
-            new_duplicates.extend(duplicates1.iter().copied().flat_map(|v1| possible2.iter().copied().map(move |v2| v1 + v2)));
-            new_duplicates.extend(duplicates1.iter().copied().flat_map(|v1| duplicates2.iter().copied().map(move |v2| v1 + v2)));
+            new_duplicates.extend(possible1.iter().flat_map(|(v1, l1)| {
+                duplicates2.iter().map(move |(v2, la2)| {
+                    (
+                        v1 + v2,
+                        [format!("{}+{}", l1, la2[0]), format!("{}+{}", l1, la2[1])],
+                    )
+                })
+            }));
+            new_duplicates.extend(duplicates1.iter().flat_map(|(v1, la1)| {
+                possible2.iter().map(move |(v2, l2)| {
+                    (
+                        v1 + v2,
+                        [format!("{}+{}", la1[0], l2), format!("{}+{}", la1[1], l2)],
+                    )
+                })
+            }));
+            new_duplicates.extend(duplicates1.iter().flat_map(|(v1, la1)| {
+                duplicates2.iter().map(move |(v2, la2)| {
+                    (
+                        v1 + v2,
+                        [
+                            format!("{}+{}", la1[0], la2[0]),
+                            format!("{}+{}", la1[1], la2[1]),
+                        ],
+                    )
+                })
+            }));
 
             if sep != 0 {
                 if ALLOW_NEGATIVE {
-                    new_duplicates.extend(possible1.iter().copied().flat_map(|v1| duplicates2.iter().copied().map(move |v2| v1 - v2)));
-                    new_duplicates.extend(duplicates1.iter().copied().flat_map(|v1| possible2.iter().copied().map(move |v2| v1 - v2)));
-                    new_duplicates.extend(duplicates1.iter().copied().flat_map(|v1| duplicates2.iter().copied().map(move |v2| v1 - v2)));
+                    new_duplicates.extend(possible1.iter().flat_map(|(v1, l1)| {
+                        duplicates2.iter().map(move |(v2, la2)| {
+                            (
+                                v1 - v2,
+                                [format!("{}-{}", l1, la2[0]), format!("{}-{}", l1, la2[1])],
+                            )
+                        })
+                    }));
+                    new_duplicates.extend(duplicates1.iter().flat_map(|(v1, la1)| {
+                        possible2.iter().map(move |(v2, l2)| {
+                            (
+                                v1 - v2,
+                                [format!("{}-{}", la1[0], l2), format!("{}-{}", la1[0], l2)],
+                            )
+                        })
+                    }));
+                    new_duplicates.extend(duplicates1.iter().flat_map(|(v1, la1)| {
+                        duplicates2.iter().map(move |(v2, la2)| {
+                            (
+                                v1 - v2,
+                                [
+                                    format!("{}-{}", la1[0], la2[0]),
+                                    format!("{}-{}", la1[1], la2[1]),
+                                ],
+                            )
+                        })
+                    }));
                 } else {
-                    new_duplicates.extend(possible1.iter().copied().flat_map(|v1| duplicates2.iter().copied().flat_map(move |v2| if v1 - v2 >= 0 { Some(v1 - v2) } else { None })));
-                    new_duplicates.extend(duplicates1.iter().copied().flat_map(|v1| possible2.iter().copied().flat_map(move |v2| if v1 - v2 >= 0 { Some(v1 - v2) } else { None })));
-                    new_duplicates.extend(duplicates1.iter().copied().flat_map(|v1| duplicates2.iter().copied().flat_map(move |v2| if v1 - v2 >= 0 { Some(v1 - v2) } else { None })));
+                    new_duplicates.extend(possible1.iter().flat_map(|(v1, l1)| {
+                        duplicates2.iter().flat_map(move |(v2, la2)| {
+                            if v1 - v2 >= 0 {
+                                Some((
+                                    v1 - v2,
+                                    [format!("{}-{}", l1, la2[0]), format!("{}-{}", l1, la2[1])],
+                                ))
+                            } else {
+                                None
+                            }
+                        })
+                    }));
+                    new_duplicates.extend(duplicates1.iter().flat_map(|(v1, la1)| {
+                        possible2.iter().flat_map(move |(v2, l2)| {
+                            if v1 - v2 >= 0 {
+                                Some((
+                                    v1 - v2,
+                                    [format!("{}-{}", la1[0], l2), format!("{}-{}", la1[1], l2)],
+                                ))
+                            } else {
+                                None
+                            }
+                        })
+                    }));
+                    new_duplicates.extend(duplicates1.iter().flat_map(|(v1, la1)| {
+                        duplicates2.iter().flat_map(move |(v2, la2)| {
+                            if v1 - v2 >= 0 {
+                                Some((
+                                    v1 - v2,
+                                    [
+                                        format!("{}-{}", la1[0], la2[0]),
+                                        format!("{}-{}", la1[1], la2[1]),
+                                    ],
+                                ))
+                            } else {
+                                None
+                            }
+                        })
+                    }));
                 }
             }
 
-            let possible_plus: BTreeSet<i64> = possible1.iter().copied().flat_map(|v1| possible2.iter().copied().map(move |v2| v1 + v2)).collect();
-            let possible_minus: BTreeSet<i64> = if sep != 0 {
+            let possible_plus: BTreeMap<i64, String> = possible1
+                .iter()
+                .flat_map(|(v1, l1)| {
+                    possible2
+                        .iter()
+                        .map(move |(v2, l2)| (v1 + v2, format!("{}+{}", l1, l2)))
+                })
+                .collect();
+            let possible_minus: BTreeMap<i64, String> = if sep != 0 {
                 if ALLOW_NEGATIVE {
-                    possible1.iter().copied().flat_map(|v1| possible2.iter().copied().map(move |v2| v1 - v2)).collect()
+                    possible1
+                        .iter()
+                        .flat_map(|(v1, l1)| {
+                            possible2
+                                .iter()
+                                .map(move |(v2, l2)| (v1 - v2, format!("{}-{}", l1, l2)))
+                        })
+                        .collect()
                 } else {
-                    possible1.iter().copied().flat_map(|v1| possible2.iter().copied().filter_map(move |v2| if v1 - v2 >= 0 { Some(v1 - v2) } else { None })).collect()
+                    possible1
+                        .iter()
+                        .flat_map(|(v1, l1)| {
+                            possible2.iter().filter_map(move |(v2, l2)| {
+                                if v1 - v2 >= 0 {
+                                    Some((v1 - v2, format!("{}-{}", l1, l2)))
+                                } else {
+                                    None
+                                }
+                            })
+                        })
+                        .collect()
                 }
             } else {
-                BTreeSet::new()
+                BTreeMap::new()
             };
 
             new_duplicates.extend(new_possible.intersection(&possible_plus));
@@ -63,69 +182,135 @@ impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
             }
 
             let new_possible_prev = new_possible;
-            new_possible = BTreeSet::new();
-            new_possible.extend(possible_plus.iter().copied().filter(|p| !new_duplicates.contains(p)));
-            new_possible.extend(new_possible_prev.iter().copied().filter(|p| !new_duplicates.contains(p)));
+            new_possible = BTreeMap::new();
+            new_possible.extend(
+                possible_plus
+                    .iter()
+                    .filter(|(v, l)| !new_duplicates.contains_key(v)).map(|(v, l)| (*v, l.clone())),
+            );
+            new_possible.extend(
+                new_possible_prev
+                    .iter()
+                    .filter(|(v, l)| !new_duplicates.contains_key(v)).map(|(v, l)| (*v, l.clone())),
+            );
             if sep != 0 {
-                new_possible.extend(possible_minus.iter().copied().filter(|p| !new_duplicates.contains(p)));
+                new_possible.extend(
+                    possible_minus
+                        .iter()
+                        .filter(|(v, l)| !new_duplicates.contains_key(v)).map(|(v, l)| (*v, l.clone())),
+                );
             }
         }
         (new_possible, new_duplicates)
     }
 
-    fn possible_results_mul(&mut self, digits: &[u8]) -> (BTreeSet<i64>, BTreeSet<i64>) {
+    fn possible_results_mul(
+        &mut self,
+        digits: &[u8],
+    ) -> (BTreeMap<i64, String>, BTreeMap<i64, [String; 2]>) {
         if digits.len() == 0 {
-            return ([1].into_iter().collect(), BTreeSet::new());
+            return ([(1, String::from(""))].into_iter().collect(), BTreeMap::new());
         }
         match self.cache_mul.get(digits) {
             Some(r) => return r.clone(),
-            None => {},
+            None => {}
         }
         let result = self.possible_results_mul_uncached(digits);
-        self.cache_mul.insert(digits.to_owned().into_boxed_slice(), result.clone());
+        self.cache_mul
+            .insert(digits.to_owned().into_boxed_slice(), result.clone());
         result
     }
-    fn possible_results_mul_uncached(&mut self, digits: &[u8]) -> (BTreeSet<i64>, BTreeSet<i64>) {
+    fn possible_results_mul_uncached(
+        &mut self,
+        digits: &[u8],
+    ) -> (BTreeMap<i64, String>, BTreeMap<i64, [String; 2]>) {
         let (possible, duplicates) = self.possible_results_mul(&digits[..digits.len() - 1]);
         let next_digit = digits[digits.len() - 1] as i64;
         if next_digit == 0 {
-            if duplicates.len() != 0 || possible.len() != 1 {
-                return (BTreeSet::new(), [0].into_iter().collect());
+            if let Some((v, [l1, l2])) = duplicates.iter().next() {
+                return (
+                    BTreeMap::new(),
+                    [(0, [format!("{}*", l1), format!("{}*", l2)])]
+                        .into_iter()
+                        .collect(),
+                );
             } else {
-                return ([0].into_iter().collect(), BTreeSet::new());
+                let mut iter = possible.iter();
+                let (v1, l1) = iter.next().unwrap();
+                if let Some((v2, l2)) = iter.next() {
+                    return (
+                        BTreeMap::new(),
+                        [(0, [format!("{}*", l1), format!("{}*", l2)])]
+                            .into_iter()
+                            .collect(),
+                    );
+                } else {
+                    return (
+                        [(0, format!("{}*", v1))].into_iter().collect(),
+                        BTreeMap::new(),
+                    );
+                }
             }
         }
-        let new_possible_mul: BTreeSet<i64> = possible.iter().copied().map(|p| p * next_digit).collect();
-        let new_possible_div: BTreeSet<i64> = if digits.len() != 1 {
-            possible.iter().copied().filter_map(|p| if p % next_digit == 0 { Some(p / next_digit) } else { None }).collect()
+        let new_possible_mul: BTreeMap<i64, String> = possible
+            .iter()
+            .map(|(p, l)| (p * next_digit, format!("{}*", l)))
+            .collect();
+        let new_possible_div: BTreeMap<i64, String> = if digits.len() != 1 {
+            possible
+                .iter()
+                .filter_map(|(p, l)| {
+                    if p % next_digit == 0 {
+                        Some((p / next_digit, format!("{}/", l)))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
         } else {
-            BTreeSet::new()
+            BTreeMap::new()
         };
-        let mut new_duplicates: BTreeSet<i64> = BTreeSet::new();
-        new_duplicates.extend(duplicates.iter().copied().map(|p| p * next_digit));
+        let mut new_duplicates: BTreeMap<i64, [String; 2]> = BTreeMap::new();
+        new_duplicates.extend(duplicates.iter().map(|(p, [l1, l2])| (p * next_digit, [format!("{}*", l1), format!("{}*", l2)])));
         if digits.len() != 1 {
-            new_duplicates.extend(duplicates.iter().copied().filter_map(|p| if p % next_digit == 0 { Some(p / next_digit) } else { None }));
-            new_duplicates.extend(new_possible_mul.intersection(&new_possible_div).copied());
+            new_duplicates.extend(duplicates.iter().filter_map(|(v, la)| {
+                if v % next_digit == 0 {
+                    Some((v / next_digit, [format!("{}/", la[0]), format!("{}/", la[1])]))
+                } else {
+                    None
+                }
+            }));
+            new_duplicates.extend(new_possible_mul.intersection(&new_possible_div).cloned());
         }
-        (new_possible_mul.symmetric_difference(&new_possible_div).copied().filter(|p| !new_duplicates.contains(p)).collect(), new_duplicates)
+        (
+            new_possible_mul
+                .symmetric_difference(&new_possible_div)
+                .cloned()
+                .filter(|(v, _)| !new_duplicates.contains_key(v))
+                .collect(),
+            new_duplicates,
+        )
     }
 }
 
 fn main() {
     let matches = Command::new("rechenraetsel")
         .author("Tobias")
-        .arg(Arg::new("digits")
-            .value_name("DIGITS")
-            .required(true)
-            .help("Digits, one character per digit. E.g. \"443\".")
+        .arg(
+            Arg::new("digits")
+                .value_name("DIGITS")
+                .required(true)
+                .help("Digits, one character per digit. E.g. \"443\"."),
         )
-        .arg(Arg::new("result")
-            .value_name("RESULT")
-            .help("Result to test for.")
+        .arg(
+            Arg::new("result")
+                .value_name("RESULT")
+                .help("Result to test for."),
         )
-        .arg(Arg::new("no-negative-partials")
-            .long("--no-negative-partials")
-            .help("Disallow negative partial sums")
+        .arg(
+            Arg::new("no-negative-partials")
+                .long("--no-negative-partials")
+                .help("Disallow negative partial sums"),
         )
         .get_matches();
 
@@ -149,9 +334,9 @@ fn main() {
     };
 
     if let Some(r) = result {
-        if possible.contains(&r) {
+        if possible.contains_key(&r) {
             println!("unique");
-        } else if duplicates.contains(&r) {
+        } else if duplicates.contains_key(&r) {
             println!("duplicate");
         } else {
             println!("impossible");
