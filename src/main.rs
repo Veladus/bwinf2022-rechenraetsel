@@ -176,7 +176,7 @@ impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
             };
 
             new_duplicates.extend(new_possible.iter().filter_map(|(v1, l1)| {
-                if let Some(l2) = possible_minus.get(v1) {
+                if let Some(l2) = possible_plus.get(v1) {
                     Some((*v1, [l1.clone(), l2.clone()]))
                 } else {
                     None
@@ -379,7 +379,14 @@ fn main() {
     if let Some(r) = result {
         if possible.contains_key(&r) {
             println!("unique");
-        } else if duplicates.contains_key(&r) {
+        } else if let Some(sols) = duplicates.get(&r) {
+            for x in sols {
+                print!("{}", digits[0]);
+                for (digit, op) in digits.iter().skip(1).zip(x.chars()) {
+                    print!(" {} {}", op, digit);
+                }
+                println!(" = {}", r);
+            }
             println!("duplicate");
         } else {
             println!("impossible");
