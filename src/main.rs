@@ -19,6 +19,11 @@ impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
                 [(0, String::from(""))].into_iter().collect(),
                 BTreeMap::new(),
             );
+        } else if digits.len() == 1 {
+            return (
+                [(digits[0] as i64, String::from(""))].into_iter().collect(),
+                BTreeMap::new(),
+            );
         }
         match self.cache.get(digits) {
             Some(r) => return r.clone(),
@@ -39,35 +44,35 @@ impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
         for sep in 0..digits.len() {
             let (possible1, duplicates1) = self.possible_results(&digits[..sep]);
             let (possible2, duplicates2) = self.possible_results_mul(&digits[sep..]);
-            new_duplicates.extend(possible1.iter().flat_map(|(v1, l1)| {
-                duplicates2.iter().map(move |(v2, la2)| {
-                    (
-                        v1 + v2,
-                        [format!("{}+{}", l1, la2[0]), format!("{}+{}", l1, la2[1])],
-                    )
-                })
-            }));
-            new_duplicates.extend(duplicates1.iter().flat_map(|(v1, la1)| {
-                possible2.iter().map(move |(v2, l2)| {
-                    (
-                        v1 + v2,
-                        [format!("{}+{}", la1[0], l2), format!("{}+{}", la1[1], l2)],
-                    )
-                })
-            }));
-            new_duplicates.extend(duplicates1.iter().flat_map(|(v1, la1)| {
-                duplicates2.iter().map(move |(v2, la2)| {
-                    (
-                        v1 + v2,
-                        [
-                            format!("{}+{}", la1[0], la2[0]),
-                            format!("{}+{}", la1[1], la2[1]),
-                        ],
-                    )
-                })
-            }));
-
             if sep != 0 {
+                new_duplicates.extend(possible1.iter().flat_map(|(v1, l1)| {
+                    duplicates2.iter().map(move |(v2, la2)| {
+                        (
+                            v1 + v2,
+                            [format!("{}+{}", l1, la2[0]), format!("{}+{}", l1, la2[1])],
+                        )
+                    })
+                }));
+                new_duplicates.extend(duplicates1.iter().flat_map(|(v1, la1)| {
+                    possible2.iter().map(move |(v2, l2)| {
+                        (
+                            v1 + v2,
+                            [format!("{}+{}", la1[0], l2), format!("{}+{}", la1[1], l2)],
+                        )
+                    })
+                }));
+                new_duplicates.extend(duplicates1.iter().flat_map(|(v1, la1)| {
+                    duplicates2.iter().map(move |(v2, la2)| {
+                        (
+                            v1 + v2,
+                            [
+                                format!("{}+{}", la1[0], la2[0]),
+                                format!("{}+{}", la1[1], la2[1]),
+                            ],
+                        )
+                    })
+                }));
+
                 if ALLOW_NEGATIVE {
                     new_duplicates.extend(possible1.iter().flat_map(|(v1, l1)| {
                         duplicates2.iter().map(move |(v2, la2)| {
@@ -139,14 +144,18 @@ impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
                 }
             }
 
-            let possible_plus: BTreeMap<i64, String> = possible1
-                .iter()
-                .flat_map(|(v1, l1)| {
-                    possible2
-                        .iter()
-                        .map(move |(v2, l2)| (v1 + v2, format!("{}+{}", l1, l2)))
-                })
-                .collect();
+            let possible_plus: BTreeMap<i64, String> = if sep != 0 {
+                possible1
+                    .iter()
+                    .flat_map(|(v1, l1)| {
+                        possible2
+                            .iter()
+                            .map(move |(v2, l2)| (v1 + v2, format!("{}+{}", l1, l2)))
+                    })
+                    .collect()
+            } else {
+                possible2.clone()
+            };
             let possible_minus: BTreeMap<i64, String> = if sep != 0 {
                 if ALLOW_NEGATIVE {
                     possible1
@@ -232,6 +241,11 @@ impl<const ALLOW_NEGATIVE: bool> Rechenraetsel<ALLOW_NEGATIVE> {
         if digits.len() == 0 {
             return (
                 [(1, String::from(""))].into_iter().collect(),
+                BTreeMap::new(),
+            );
+        } else if digits.len() == 1 {
+            return (
+                [(digits[0] as i64, String::from(""))].into_iter().collect(),
                 BTreeMap::new(),
             );
         }
